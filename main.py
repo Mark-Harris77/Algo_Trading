@@ -4,11 +4,9 @@ import datetime
 from strategy import indicate
 debug = False
 #TODO
-#need a date handler or smth to allow same rows in different tables to have different dates
 #finish trading method that sells all remaining stocks
-#some kind of print report method which shows current money / stocks owned
 #maybe move loop marked 1 into strategy
-#IMPORTANT share price seems wrong
+
 
 def get_file(filename):
     filename = os.path.join("data", filename)
@@ -122,6 +120,14 @@ class controller:
     def increment_day(self):
         self.c_date += datetime.timedelta(days=1)
 
+    def report(self):
+        print('-'*30)
+        portfolio_str = 'Portfolio:'
+        for stock in self.portfolio.values():
+            portfolio_str += ' ' + stock.name + ':' + str(stock.owned)
+        print(portfolio_str)
+        print('Money: ' + str(self.money))
+
         
 
 
@@ -135,9 +141,11 @@ start_money = 1000
 trade_controller = controller(start_money, stocks, "2000-12-01", "2020-01-01")
 # trade_controller.portfolio['AAPL'].update_day()
 # print(trade_controller.portfolio['AAPL'].get_data())
-
+i = 0
 while not trade_controller.isFinished():
     #1
+    if i % 1000 == 0:
+        trade_controller.report()
     for stock in trade_controller.portfolio.values():
         #print('Share Price', stock.get_share_price(trade_controller.c_date))
         data = stock.get_data(trade_controller.c_date)
@@ -149,9 +157,9 @@ while not trade_controller.isFinished():
             else:
                 #sell
                 trade_controller.sell(stock.name)
-                
+    i+=1
     trade_controller.increment_day()
     #print(trade_controller.c_date, trade_controller.money)
 
 trade_controller.sell('AAPL')
-print(trade_controller.money)
+trade_controller.report()
