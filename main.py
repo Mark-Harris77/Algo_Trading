@@ -1,12 +1,14 @@
 import os
 import pandas as pd
+import datetime
 from strategy import indicate
-
+debug = False
 #TODO
 #need a date handler or smth to allow same rows in different tables to have different dates
 #finish trading method that sells all remaining stocks
 #some kind of print report method which shows current money / stocks owned
-
+#maybe move loop marked 1 into strategy
+#IMPORTANT share price seems wrong
 
 def get_file(filename):
     filename = os.path.join("data", filename)
@@ -14,47 +16,62 @@ def get_file(filename):
     try:
         return pd.read_csv(filename)
     except:
-        print("Error Opening File: " + filename)
-
+        if debug: print("Error Opening File: " + filename)      
 
 class stock:
-
-    current_day = 30
-
     def __init__(self, name, data):
         self.name = name
         self.data = data
         self.owned = 0
 
-    def get_data(self):
-        return self.data[:self.current_day]
+    def get_data(self, date):
+        if (self.data['Date'] == str(date)[:10]).any():
+            index = self.data[self.data['Date'] == str(date)[:10]].index
+            return self.data[:index[0]]
+        else:
+            return None
     
-    def get_share_price(self):
-        return self.data.at[self.current_day, 'Adj Close']
+    def get_share_price(self, date):
+        #return self.data.at[self.current_day, 'Adj Close']
+        if (self.data['Date'] == str(date)[:10]).any():
+            return float(self.data.loc[self.data['Date'] == str(date)[:10]]['Adj Close'])
+        else:
+            #look for previous days to sell from
+            for i in range(30):
+                date -= datetime.timedelta(days=1)
+                if (self.data['Date'] == str(date)[:10]).any():
+                    return float(self.data.loc[self.data['Date'] == str(date)[:10]]['Adj Close'])
+        
+        
 
-    @classmethod
-    def update_day(cls):
-        cls.current_day += 1
 
 class controller:
-    def __init__(self, money, stocks_to_trade):
+    def __init__(self, money, stocks_to_trade, start_date, end_date):
         self.money = money
-
+        self.c_date = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+        self.e_date = datetime.datetime.strptime(end_date, '%Y-%m-%d')
         #setup the portfolio dictonary
         self.portfolio = {}
         for s in stocks_to_trade:
             self.portfolio[s] = stock(s, get_file(s))
 
+    def isFinished(self):
+        if self.c_date == self.e_date:
+            return True
+        else:
+            return False
+
     def buy(self, name, shares=0):
         if name in self.portfolio:
 
-            share_price = self.portfolio[name].get_share_price()
-
+            share_price = self.portfolio[name].get_share_price(self.c_date)
+            if share_price is None:
+                return False
             #when shares is 0 assume buy max possible
             if shares == 0:
                 shares = self.money // share_price
                 if shares == 0:
-                    print('Not enough money to buy shares in ' + name)
+                    if debug: print('Not enough money to buy shares in ' + name)
                     return False
                 else:
                     self.money -= shares * share_price
@@ -63,7 +80,7 @@ class controller:
 
             else:
                 if self.money < shares * share_price:
-                    print('Not enough to complete transaction')
+                    if debug: print('Not enough to complete transaction')
                     return False
                 else:
                     self.money -= shares * share_price
@@ -71,16 +88,17 @@ class controller:
                     return True
 
         else:
-            print(name + " couldnt be found in portfolio")
+            if debug: print(name + " couldnt be found in portfolio")
             return False
     
     def sell(self, name, shares=0):
         if name in self.portfolio:
             
-            share_price = self.portfolio[name].get_share_price()
-
+            share_price = self.portfolio[name].get_share_price(self.c_date)
+            if share_price is None:
+                return False
             if self.portfolio[name].owned == 0:
-                print('No shares in ' + name)
+                if debug: print('No shares in ' + name)
                 return False
             #if shares = 0 then assume sell all
             if shares == 0:
@@ -90,7 +108,7 @@ class controller:
                 return True
             else:
                 if self.portfolio[name].owned < shares:
-                    print('Not enough shares in ' + name + 'owned')
+                    if debug: print('Not enough shares in ' + name + 'owned')
                     return False
                 else:
                     self.portfolio[name].owned -= shares
@@ -98,8 +116,12 @@ class controller:
                     return True
 
         else:
-            print(name + " couldnt be found in portfolio")
+            if debug: print(name + " couldnt be found in portfolio")
             return False
+
+    def increment_day(self):
+        self.c_date += datetime.timedelta(days=1)
+
         
 
 
@@ -110,22 +132,26 @@ class controller:
 stocks = ['AAPL']
 start_money = 1000
 
-trade_controller = controller(start_money, stocks)
-trade_controller.portfolio['AAPL'].update_day()
-print(trade_controller.portfolio['AAPL'].get_data())
+trade_controller = controller(start_money, stocks, "2000-12-01", "2020-01-01")
+# trade_controller.portfolio['AAPL'].update_day()
+# print(trade_controller.portfolio['AAPL'].get_data())
 
-for i in range(4500):
+while not trade_controller.isFinished():
+    #1
     for stock in trade_controller.portfolio.values():
-        data = stock.get_data()
-        ind = indicate(data)
-        if ind:
-            #buy
-            trade_controller.buy(stock.name)
-        else:
-            #sell
-            trade_controller.sell(stock.name)
-    stock.update_day()
-    print(stock.current_day, trade_controller.money)
+        #print('Share Price', stock.get_share_price(trade_controller.c_date))
+        data = stock.get_data(trade_controller.c_date)
+        if data is not None:
+            ind = indicate(data)
+            if ind:
+                #buy
+                trade_controller.buy(stock.name)
+            else:
+                #sell
+                trade_controller.sell(stock.name)
+                
+    trade_controller.increment_day()
+    #print(trade_controller.c_date, trade_controller.money)
 
 trade_controller.sell('AAPL')
 print(trade_controller.money)
