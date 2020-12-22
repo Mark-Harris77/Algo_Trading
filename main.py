@@ -4,7 +4,7 @@ import datetime
 from strategy import indicate
 debug = False
 #TODO
-#finish trading method that sells all remaining stocks
+#test with multiple stocks, should work but who knows
 #maybe move loop marked 1 into strategy
 
 
@@ -29,21 +29,24 @@ class stock:
         else:
             return None
     
-    def get_share_price(self, date):
+    def get_share_price(self, date, force=False):
         #return self.data.at[self.current_day, 'Adj Close']
         if (self.data['Date'] == str(date)[:10]).any():
             return float(self.data.loc[self.data['Date'] == str(date)[:10]]['Adj Close'])
         else:
-            #look for previous days to sell from
-            for i in range(30):
-                date -= datetime.timedelta(days=1)
-                if (self.data['Date'] == str(date)[:10]).any():
-                    return float(self.data.loc[self.data['Date'] == str(date)[:10]]['Adj Close'])
+            if force:
+                #look for previous days to sell from
+                for i in range(30):
+                    date -= datetime.timedelta(days=1)
+                    if (self.data['Date'] == str(date)[:10]).any():
+                        return float(self.data.loc[self.data['Date'] == str(date)[:10]]['Adj Close'])
+            else:
+                return False
         
         
 
 
-class controller:
+class controller: 
     def __init__(self, money, stocks_to_trade, start_date, end_date):
         self.money = money
         self.c_date = datetime.datetime.strptime(start_date, '%Y-%m-%d')
@@ -89,10 +92,10 @@ class controller:
             if debug: print(name + " couldnt be found in portfolio")
             return False
     
-    def sell(self, name, shares=0):
+    def sell(self, name, shares=0, force=False):
         if name in self.portfolio:
             
-            share_price = self.portfolio[name].get_share_price(self.c_date)
+            share_price = self.portfolio[name].get_share_price(self.c_date, force)
             if share_price is None:
                 return False
             if self.portfolio[name].owned == 0:
@@ -117,6 +120,11 @@ class controller:
             if debug: print(name + " couldnt be found in portfolio")
             return False
 
+    def finish(self):
+        for stock in self.portfolio.values():
+            self.sell(stock.name, force=True)
+        self.report()
+
     def increment_day(self):
         self.c_date += datetime.timedelta(days=1)
 
@@ -128,6 +136,9 @@ class controller:
         print(portfolio_str)
         print('Money: ' + str(self.money))
 
+    def run(self):
+        pass
+
         
 
 
@@ -135,8 +146,8 @@ class controller:
 
 
 
-stocks = ['AAPL']
-start_money = 1000
+stocks = ['BTC-USD']
+start_money = 1000000
 
 trade_controller = controller(start_money, stocks, "2000-12-01", "2020-01-01")
 # trade_controller.portfolio['AAPL'].update_day()
@@ -144,7 +155,7 @@ trade_controller = controller(start_money, stocks, "2000-12-01", "2020-01-01")
 i = 0
 while not trade_controller.isFinished():
     #1
-    if i % 1000 == 0:
+    if i % 1 == 0:
         trade_controller.report()
     for stock in trade_controller.portfolio.values():
         #print('Share Price', stock.get_share_price(trade_controller.c_date))
@@ -161,5 +172,4 @@ while not trade_controller.isFinished():
     trade_controller.increment_day()
     #print(trade_controller.c_date, trade_controller.money)
 
-trade_controller.sell('AAPL')
-trade_controller.report()
+trade_controller.finish()
